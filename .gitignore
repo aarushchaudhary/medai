@@ -1,0 +1,5 @@
+# Both node_module directories of client and server
+/client/node_modules
+/server/node_modules
+# enviornment variables
+/server/.env
