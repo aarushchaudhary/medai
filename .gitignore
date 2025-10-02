@@ -3,3 +3,5 @@
 /server/node_modules
 # enviornment variables
 /server/.env
+# uploads directory
+/server/uploads
