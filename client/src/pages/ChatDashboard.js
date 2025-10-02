@@ -1,38 +1,64 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
-import { sendMessageToServer, saveChatToServer } from '../services/api';
+// Updated imports to include the new image upload service
+import { sendMessageToServer, uploadImageAndMessageToServer, saveChatToServer } from '../services/api';
 
-// Accept a new prop 'initialMessages'
 const ChatDashboard = ({ onChatSaved, initialMessages }) => {
   const defaultInitialMessage = [{ text: "Hello! I am MedAI, your assistant for all medical needs. How can I help you today?", sender: "bot" }];
   const [messages, setMessages] = useState(defaultInitialMessage);
   const [isTyping, setIsTyping] = useState(false);
   const hasBeenSaved = useRef(false);
 
-  // This useEffect hook will run whenever a new chat is selected from the history
   useEffect(() => {
     if (initialMessages) {
       setMessages(initialMessages);
-      hasBeenSaved.current = true; // A loaded chat is considered "saved"
+      hasBeenSaved.current = true;
     }
   }, [initialMessages]);
 
-  const handleSend = async (messageText) => {
-    const userMessage = { sender: 'user', text: messageText };
+  // --- UPDATED handleSend FUNCTION ---
+  // Now accepts an object with { text, image }
+  const handleSend = async ({ text, image }) => {
+    // Create the user message object for immediate display
+    const userMessage = {
+      sender: 'user',
+      text: text,
+      // Use a local blob URL for instant preview
+      image: image ? URL.createObjectURL(image) : null
+    };
+
     setMessages(prevMessages => [...prevMessages, userMessage]);
     setIsTyping(true);
-    hasBeenSaved.current = false; // Sending a new message makes the chat unsaved
+    hasBeenSaved.current = false;
 
     try {
-      const reply = await sendMessageToServer(messageText);
-      const aiMessage = { sender: 'bot', text: reply };
-      setMessages(prevMessages => [...prevMessages, aiMessage]);
+        let responseData;
+        if (image) {
+            // If there's an image, create FormData and call the upload service
+            const formData = new FormData();
+            formData.append('image', image);
+            formData.append('message', text);
+            responseData = await uploadImageAndMessageToServer(formData);
+            
+            // Update the user message with the permanent URL from the server
+            userMessage.image = `http://localhost:5000${responseData.imageUrl}`;
+        } else {
+            // Otherwise, send a normal text message
+            responseData = await sendMessageToServer(text);
+        }
+
+        const aiMessage = { sender: 'bot', text: responseData.reply };
+        
+        // Update the message list, ensuring the user message has the permanent image URL
+        setMessages(prevMessages => [...prevMessages.filter(m => m !== userMessage), userMessage, aiMessage]);
+
     } catch (error) {
-      const errorMessage = { sender: 'ai', text: 'Sorry, something went wrong.' };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+        console.error("Error sending message:", error);
+        const errorMessage = { sender: 'bot', text: 'Sorry, something went wrong.' };
+        setMessages(prevMessages => [...prevMessages, errorMessage]);
     } finally {
-      setIsTyping(false);
+        setIsTyping(false);
     }
   };
 
@@ -45,7 +71,6 @@ const ChatDashboard = ({ onChatSaved, initialMessages }) => {
       await saveChatToServer(messages);
       hasBeenSaved.current = true;
       alert('Chat saved successfully!');
-      // Notify the parent component (App.js) to refresh the history list
       if (onChatSaved) {
         onChatSaved();
       }
@@ -62,13 +87,8 @@ const ChatDashboard = ({ onChatSaved, initialMessages }) => {
         await handleSaveChat();
       }
     }
-    // Reset the chat to the initial welcome message
     setMessages(defaultInitialMessage);
     hasBeenSaved.current = false;
-  };
-
-  const handleFileUpload = (file) => {
-    console.log('File upload initiated for:', file.name);
   };
 
   return (
@@ -76,7 +96,8 @@ const ChatDashboard = ({ onChatSaved, initialMessages }) => {
       <MessageList messages={messages} isTyping={isTyping} />
 
       <div className="p-4 bg-white border-t border-gray-200">
-        <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} />
+        {/* The onFileUpload prop is no longer needed */}
+        <ChatInput onSend={handleSend} />
         
         <div className="flex items-center justify-end space-x-2 mt-2">
           <button

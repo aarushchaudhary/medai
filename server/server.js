@@ -1,36 +1,35 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+// Load environment variables as early as possible so other modules can use them
+dotenv.config();
+
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
-
-// --- Connect to MongoDB Database ---
-// This function is called as soon as the server starts.
-connectDB();
-
-// --- App Configuration ---
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// --- Import API Routes ---
 const chatRoutes = require('./routes/chatRoutes');
+const path = require('path');
+const fs = require('fs');
 
-// --- Middleware ---
-// Enable Cross-Origin Resource Sharing to allow your React app to communicate with this server.
+const app = express();
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+
 app.use(cors());
-// Enable the server to accept and parse JSON in request bodies.
 app.use(express.json());
 
-// --- API Route Setup ---
-// Any request starting with /api will be handled by the chatRoutes module.
-app.use('/api', chatRoutes);
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// --- Default Route for Testing ---
-app.get('/', (req, res) => {
-  res.send('MedAI Server is running.');
-});
 
-// --- Start the Server ---
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+connectDB();
 
+app.use('/api/chat', chatRoutes);
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

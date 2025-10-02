@@ -1,22 +1,28 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Message from './Message';
-import Loader from '../common/Loader';
+// --- FIX ---
+// The 'Loader' component is no longer used directly in this file, so its import has been removed.
 
 const MessageList = ({ messages, isTyping }) => {
-  const chatEndRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  // Automatically scroll to the bottom when new messages are added
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom();
   }, [messages, isTyping]);
 
   return (
-    <main className="flex-1 overflow-y-auto p-6 space-y-6">
-      {messages.map((msg, index) => (
-        <Message key={index} message={msg} />
-      ))}
-      {isTyping && <Message message={{ sender: 'bot', isTyping: true }} />}
-      <div ref={chatEndRef} />
+    <main className="flex-1 p-4 overflow-y-auto">
+      <div className="max-w-5xl mx-auto">
+        {messages.map((msg, index) => (
+          <Message key={index} message={msg} />
+        ))}
+        {isTyping && <Message message={{ sender: 'bot', isTyping: true }} />}
+        <div ref={messagesEndRef} />
+      </div>
     </main>
   );
 };

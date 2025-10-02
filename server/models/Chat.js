@@ -7,10 +7,15 @@ const MessageSchema = new mongoose.Schema({
     enum: ['user', 'bot', 'ai']
   },
   text: {
-    type: String, // Storing encrypted text
+    type: String, 
     required: true
+  },
+  // --- ADD THIS LINE ---
+  image: {
+    type: String,
+    required: false // Not every message will have an image
   }
-}, { _id: false }); // No separate _id for messages
+}, { _id: false });
 
 const ChatSchema = new mongoose.Schema({
   title: {
@@ -18,14 +23,12 @@ const ChatSchema = new mongoose.Schema({
     required: true
   },
   messages: [MessageSchema],
-  // --- NEW FIELD ---
   pinned: {
     type: Boolean,
     default: false
   }
-}, { timestamps: true }); // Automatically adds createdAt and updatedAt
+}, { timestamps: true });
 
-// --- NEW: Index for efficient sorting ---
 ChatSchema.index({ pinned: -1, createdAt: -1 });
 
 module.exports = mongoose.model('Chat', ChatSchema);

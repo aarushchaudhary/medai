@@ -1,11 +1,12 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 
 /**
- * Sends a single message to the chat endpoint and gets a reply.
+ * Sends a single text message to the chat endpoint and gets a reply.
  */
 export const sendMessageToServer = async (message) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    // Corrected endpoint
+    const response = await fetch(`${API_BASE_URL}/chat/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
@@ -14,12 +15,35 @@ export const sendMessageToServer = async (message) => {
     if (!response.ok) throw new Error('Network response was not ok');
     
     const data = await response.json();
-    return data.reply;
+    return data; // Return the full response object
   } catch (error) {
     console.error("Failed to fetch chat response:", error);
-    return "Sorry, I'm having trouble connecting. Please try again later.";
+    return { reply: "Sorry, I'm having trouble connecting. Please try again later." };
   }
 };
+
+/**
+ * --- NEW IMPLEMENTATION ---
+ * Uploads an image along with a text message for analysis.
+ */
+export const uploadImageAndMessageToServer = async (formData) => {
+    try {
+      // Corrected endpoint for image uploads
+      const response = await fetch(`${API_BASE_URL}/chat/upload`, {
+        method: 'POST',
+        body: formData, // FormData handles the headers automatically
+      });
+  
+      if (!response.ok) throw new Error('Network response was not ok during file upload');
+      
+      const data = await response.json();
+      return data; // Returns { reply, imageUrl }
+    } catch (error) {
+      console.error("Failed to upload image and send message:", error);
+      return { reply: "Sorry, I couldn't process the image. Please try again." };
+    }
+  };
+
 
 /**
  * Sends a full chat session to the server to be saved.
@@ -30,7 +54,8 @@ export const saveChatToServer = async (messages) => {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/save`, {
+    // Corrected endpoint
+    const response = await fetch(`${API_BASE_URL}/chat/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),
@@ -53,7 +78,8 @@ export const saveChatToServer = async (messages) => {
  */
 export const getChatHistory = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/history`);
+    // Corrected endpoint
+    const response = await fetch(`${API_BASE_URL}/chat/history`);
     if (!response.ok) throw new Error('Failed to fetch chat history.');
     return await response.json();
   } catch (error) {
@@ -67,7 +93,8 @@ export const getChatHistory = async () => {
  */
 export const getChatById = async (id) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${id}`);
+    // Corrected endpoint
+    const response = await fetch(`${API_BASE_URL}/chat/${id}`);
     if (!response.ok) throw new Error('Failed to fetch chat by ID.');
     return await response.json();
   } catch (error) {
@@ -77,13 +104,13 @@ export const getChatById = async (id) => {
 };
 
 /**
- * --- NEW FUNCTION ---
  * Updates a chat's data (e.g., title or pinned status).
  */
 export const updateChat = async (id, data) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${id}`, {
-      method: 'PATCH',
+    // Corrected endpoint and method
+    const response = await fetch(`${API_BASE_URL}/chat/${id}`, {
+      method: 'PUT', // Using PUT as per the controller for updates
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
@@ -96,12 +123,12 @@ export const updateChat = async (id, data) => {
 };
 
 /**
- * --- NEW FUNCTION ---
  * Deletes a chat by its ID.
  */
 export const deleteChat = async (id) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+    // Corrected endpoint
+    const response = await fetch(`${API_BASE_URL}/chat/${id}`, {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete chat.');
@@ -111,12 +138,3 @@ export const deleteChat = async (id) => {
     return null;
   }
 };
-
-/**
- * (Placeholder) A function for handling file uploads.
- */
-export const uploadImageToServer = async (file) => {
-    console.log("Uploading file:", file.name);
-    // This is a simulated response.
-    return new Promise(resolve => setTimeout(() => resolve(`Analyzed ${file.name}. [Analysis feature coming soon]`), 1500));
-}

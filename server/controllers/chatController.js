@@ -4,10 +4,10 @@ const Chat = require('../models/Chat');
 const { encrypt, decrypt } = require('../services/encryptionService');
 
 /**
- * Handles incoming chat messages in real-time, scrapes for context,
+ * Handles incoming text-based chat messages, scrapes for context,
  * and gets a response from the AI model.
  */
-const handleChatRequest = async (req, res) => {
+const sendMessage = async (req, res) => {
   try {
     const { message } = req.body;
 
@@ -49,6 +49,7 @@ const handleChatRequest = async (req, res) => {
       AI assistant. Consult a professional for medical or legal advice.
     `;
 
+    // Assumes aiService.getAiResponse can handle a text-only prompt
     const reply = await ai.getAiResponse(prompt);
     res.json({ reply });
 
@@ -58,10 +59,55 @@ const handleChatRequest = async (req, res) => {
   }
 };
 
+/**
+ * --- NEW FUNCTION ---
+ * Handles image uploads, creates a prompt for analysis,
+ * and gets a response from the AI model.
+ */
+const uploadImageAndAnalyze = async (req, res) => {
+    try {
+      const { message } = req.body; 
+      const file = req.file;
+  
+      if (!file) {
+        return res.status(400).json({ error: 'Image file is required.' });
+      }
+      
+      const prompt = `
+        You are "Pharma Guide India," an expert AI specializing in analyzing images of medicine labels, food labels, and doctor's prescriptions. Your responses must be concise and well-formatted.
+
+        User query: "${message}"
+        
+        Attached Image: 
+
+        YOUR TASK & FORMATTING RULES:
+        1.  Analyze the attached image.
+        2.  Provide a clear and concise summary of the key information found in the image.
+        3.  If the user asks a specific question in their query, focus your answer on that question.
+        4.  Use markdown for clarity (e.g., headings, bullet points).
+        5.  Insert a markdown horizontal rule (\`---\`) before the disclaimer.
+        6.  End with the mandatory disclaimer.
+
+        Disclaimer Text:
+        ### Disclaimer
+        AI assistant. Consult a professional for medical or legal advice. This analysis is based on the provided image and may not be fully accurate.
+      `;
+      
+      // Assumes your aiService.getAiResponse is updated to handle a file argument
+      const reply = await ai.getAiResponse(prompt, file); 
+
+      res.json({ reply, imageUrl: `/uploads/${file.filename}` });
+
+    } catch (error) {
+      console.error('Error in image analysis controller:', error);
+      res.status(500).json({ message: error.message || 'An internal server error occurred during image analysis.' });
+    }
+};
+
 
 /**
  * Saves a completed chat session to the database.
- * Messages are encrypted before storage.
+ * Messages (including image URLs) are encrypted before storage.
  */
 const saveChat = async (req, res) => {
   try {
@@ -71,14 +117,13 @@ const saveChat = async (req, res) => {
       return res.status(400).json({ error: 'A valid chat session is required.' });
     }
     
-    // Find the first user message to create a more relevant title.
     const firstUserMessage = messages.find(msg => msg.sender === 'user');
     const title = firstUserMessage ? firstUserMessage.text.substring(0, 30) + '...' : 'Chat Session...';
 
-
     const encryptedMessages = messages.map(msg => ({
       sender: msg.sender,
-      text: encrypt(msg.text) // Encrypt the message text
+      text: encrypt(msg.text),
+      image: msg.image // Save the image URL along with the message
     }));
     
     const newChat = new Chat({
@@ -97,14 +142,13 @@ const saveChat = async (req, res) => {
 
 /**
  * Fetches the list of all saved chat titles and their IDs.
- * Now sorts pinned chats to the top.
+ * Sorts pinned chats to the top.
  */
 const getChatHistory = async (req, res) => {
   try {
-    // MODIFIED: Sort by pinned status first, then by creation date
     const chats = await Chat.find()
       .sort({ pinned: -1, createdAt: -1 })
-      .select('title _id pinned'); // Also select the 'pinned' field
+      .select('title _id pinned');
     res.json(chats);
   } catch (error) {
     console.error('Error fetching chat history:', error);
@@ -123,10 +167,10 @@ const getChatById = async (req, res) => {
       return res.status(404).json({ error: 'Chat not found.' });
     }
 
-    // Decrypt the messages before sending them to the client
     const decryptedMessages = chat.messages.map(msg => ({
-      ...msg.toObject(), // Convert mongoose doc to plain object
-      text: decrypt(msg.text)
+      ...msg.toObject(),
+      text: decrypt(msg.text),
+      image: msg.image // Also retrieve the image URL
     }));
 
     res.json({ ...chat.toObject(), messages: decryptedMessages });
@@ -138,7 +182,6 @@ const getChatById = async (req, res) => {
 };
 
 /**
- * --- NEW FUNCTION ---
  * Updates a chat's title or pinned status.
  */
 const updateChat = async (req, res) => {
@@ -169,7 +212,6 @@ const updateChat = async (req, res) => {
 };
 
 /**
- * --- NEW FUNCTION ---
  * Deletes a chat from the database.
  */
 const deleteChat = async (req, res) => {
@@ -190,14 +232,12 @@ const deleteChat = async (req, res) => {
 };
 
 
-// --- CORRECTED EXPORTS ---
-// Ensure all functions are exported so the router can use them.
 module.exports = { 
-  handleChatRequest,
+  sendMessage,
+  uploadImageAndAnalyze,
   saveChat,
   getChatHistory,
   getChatById,
   updateChat,
   deleteChat
 };
-
