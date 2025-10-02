@@ -70,8 +70,11 @@ const saveChat = async (req, res) => {
     if (!messages || messages.length < 2) {
       return res.status(400).json({ error: 'A valid chat session is required.' });
     }
+    
+    // Find the first user message to create a more relevant title.
+    const firstUserMessage = messages.find(msg => msg.sender === 'user');
+    const title = firstUserMessage ? firstUserMessage.text.substring(0, 30) + '...' : 'Chat Session...';
 
-    const title = messages[0].text.substring(0, 30) + '...';
 
     const encryptedMessages = messages.map(msg => ({
       sender: msg.sender,
@@ -94,10 +97,14 @@ const saveChat = async (req, res) => {
 
 /**
  * Fetches the list of all saved chat titles and their IDs.
+ * Now sorts pinned chats to the top.
  */
 const getChatHistory = async (req, res) => {
   try {
-    const chats = await Chat.find().sort({ createdAt: -1 }).select('title _id');
+    // MODIFIED: Sort by pinned status first, then by creation date
+    const chats = await Chat.find()
+      .sort({ pinned: -1, createdAt: -1 })
+      .select('title _id pinned'); // Also select the 'pinned' field
     res.json(chats);
   } catch (error) {
     console.error('Error fetching chat history:', error);
@@ -105,9 +112,92 @@ const getChatHistory = async (req, res) => {
   }
 };
 
+/**
+ * Fetches a single chat by its ID and decrypts its messages.
+ */
+const getChatById = async (req, res) => {
+  try {
+    const chat = await Chat.findById(req.params.id);
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found.' });
+    }
+
+    // Decrypt the messages before sending them to the client
+    const decryptedMessages = chat.messages.map(msg => ({
+      ...msg.toObject(), // Convert mongoose doc to plain object
+      text: decrypt(msg.text)
+    }));
+
+    res.json({ ...chat.toObject(), messages: decryptedMessages });
+
+  } catch (error) {
+    console.error('Error fetching chat by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch chat.' });
+  }
+};
+
+/**
+ * --- NEW FUNCTION ---
+ * Updates a chat's title or pinned status.
+ */
+const updateChat = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, pinned } = req.body;
+
+    const chat = await Chat.findById(id);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found.' });
+    }
+
+    if (typeof title === 'string') {
+      chat.title = title;
+    }
+
+    if (typeof pinned === 'boolean') {
+      chat.pinned = pinned;
+    }
+
+    await chat.save();
+    res.json(chat);
+
+  } catch (error) {
+    console.error('Error updating chat:', error);
+    res.status(500).json({ error: 'Failed to update chat.' });
+  }
+};
+
+/**
+ * --- NEW FUNCTION ---
+ * Deletes a chat from the database.
+ */
+const deleteChat = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Chat.findByIdAndDelete(id);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Chat not found.' });
+    }
+
+    res.status(200).json({ message: 'Chat deleted successfully.' });
+
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    res.status(500).json({ error: 'Failed to delete chat.' });
+  }
+};
+
+
+// --- CORRECTED EXPORTS ---
+// Ensure all functions are exported so the router can use them.
 module.exports = { 
   handleChatRequest,
   saveChat,
-  getChatHistory 
+  getChatHistory,
+  getChatById,
+  updateChat,
+  deleteChat
 };
 

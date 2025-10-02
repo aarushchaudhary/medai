@@ -1,73 +1,98 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
-import { sendMessageToServer, uploadImageToServer, saveChatToServer } from '../services/api';
+import { sendMessageToServer, saveChatToServer } from '../services/api';
 
-const ChatDashboard = () => {
-  const initialMessage = { text: "Hello! I am MedAI, your assistant for all medical needs. How can I help you today?", sender: "bot" };
-  
-  const [messages, setMessages] = useState([initialMessage]);
+// Accept a new prop 'initialMessages'
+const ChatDashboard = ({ onChatSaved, initialMessages }) => {
+  const defaultInitialMessage = [{ text: "Hello! I am MedAI, your assistant for all medical needs. How can I help you today?", sender: "bot" }];
+  const [messages, setMessages] = useState(defaultInitialMessage);
   const [isTyping, setIsTyping] = useState(false);
-  
-  // Ref to track if the chat has been saved to prevent multiple saves
   const hasBeenSaved = useRef(false);
 
-  // --- AUTO-SAVE ON EXIT (Optional: Uncomment to enable) ---
-  // useEffect(() => {
-  //   const handleBeforeUnload = (event) => {
-  //     if (messages.length > 1 && !hasBeenSaved.current) {
-  //       saveChatToServer(messages);
-  //     }
-  //   };
-  //   window.addEventListener('beforeunload', handleBeforeUnload);
-  //   return () => {
-  //     window.removeEventListener('beforeunload', handleBeforeUnload);
-  //   };
-  // }, [messages]);
-
-  const handleSend = async (inputText) => {
-    const userMessage = { text: inputText, sender: 'user' };
-    setMessages(prev => [...prev, userMessage]);
-    setIsTyping(true);
-
-    const botReply = await sendMessageToServer(inputText);
-    const botMessage = { text: botReply, sender: 'bot' };
-    setMessages(prev => [...prev, botMessage]);
-    setIsTyping(false);
-  };
-
-  const handleFileUpload = (file) => {
-    // ... (keep your existing file upload logic) ...
-  };
-
-  /**
-   * --- NEW FUNCTION ---
-   * Handles starting a new chat session. It saves the old one first.
-   */
-  const handleNewChat = async () => {
-    // Save the current chat if it has content and hasn't been saved yet
-    if (messages.length > 1 && !hasBeenSaved.current) {
-      await saveChatToServer(messages);
+  // This useEffect hook will run whenever a new chat is selected from the history
+  useEffect(() => {
+    if (initialMessages) {
+      setMessages(initialMessages);
+      hasBeenSaved.current = true; // A loaded chat is considered "saved"
     }
-    // Reset the chat to its initial state
-    setMessages([initialMessage]);
+  }, [initialMessages]);
+
+  const handleSend = async (messageText) => {
+    const userMessage = { sender: 'user', text: messageText };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setIsTyping(true);
+    hasBeenSaved.current = false; // Sending a new message makes the chat unsaved
+
+    try {
+      const reply = await sendMessageToServer(messageText);
+      const aiMessage = { sender: 'bot', text: reply };
+      setMessages(prevMessages => [...prevMessages, aiMessage]);
+    } catch (error) {
+      const errorMessage = { sender: 'ai', text: 'Sorry, something went wrong.' };
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleSaveChat = async () => {
+    if (messages.length < 2) {
+      alert('There is nothing to save yet.');
+      return;
+    }
+    try {
+      await saveChatToServer(messages);
+      hasBeenSaved.current = true;
+      alert('Chat saved successfully!');
+      // Notify the parent component (App.js) to refresh the history list
+      if (onChatSaved) {
+        onChatSaved();
+      }
+    } catch (error) {
+      alert('Failed to save chat. Please try again.');
+      console.error('Error saving chat:', error);
+    }
+  };
+
+  const handleNewChat = async () => {
+    if (messages.length > 1 && !hasBeenSaved.current) {
+      const confirmSave = window.confirm("You have unsaved changes. Do you want to save before starting a new chat?");
+      if (confirmSave) {
+        await handleSaveChat();
+      }
+    }
+    // Reset the chat to the initial welcome message
+    setMessages(defaultInitialMessage);
     hasBeenSaved.current = false;
   };
 
-  return (
-    <div className="flex flex-col h-full bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200 max-w-5xl mx-auto">
-      {/* --- NEW CHAT BUTTON ADDED --- */}
-      <div className="p-2 border-b border-gray-200 flex justify-end">
-        <button 
-          onClick={handleNewChat}
-          className="px-4 py-2 text-xs font-semibold text-white bg-[#d2232a] rounded-md hover:bg-red-700 transition-colors"
-        >
-          + New Chat
-        </button>
-      </div>
+  const handleFileUpload = (file) => {
+    console.log('File upload initiated for:', file.name);
+  };
 
+  return (
+    <div className="flex flex-col h-full bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
       <MessageList messages={messages} isTyping={isTyping} />
-      <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} />
+
+      <div className="p-4 bg-white border-t border-gray-200">
+        <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} />
+        
+        <div className="flex items-center justify-end space-x-2 mt-2">
+          <button
+            onClick={handleSaveChat}
+            className="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+          >
+            Save Chat
+          </button>
+          <button 
+            onClick={handleNewChat}
+            className="px-4 py-2 text-xs font-semibold text-white bg-[#d2232a] rounded-md hover:bg-red-700 transition-colors"
+          >
+            + New Chat
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
